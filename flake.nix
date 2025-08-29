@@ -25,7 +25,7 @@
           pname = "backend";
           version = "0.1.0";
           src = ./backend;
-          cargoLock.lockFile = ./Cargo.lock;
+          cargoLock.lockFile = ./backend/Cargo.lock;
 
           cargoBuildOptions = [ "-p" "backend" ];
 
