@@ -1,52 +1,72 @@
 {
-  description = "Full-stack Rust (Axum) + React (Vite)";
+  description = "Full-stack Rust (Axum backend) + React (frontend) separate build";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    oxalica.url = "github:oxalica/rust-overlay";
-    oxalica.inputs.nixpkgs.follows = "nixpkgs";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, oxalica, ... }:
+  outputs = { self, nixpkgs, rust-overlay, ... }:
     let
       system = "x86_64-linux";
-      overlays = [ oxalica.overlays.default ];
+      overlays = [ rust-overlay.overlays.default ];
       pkgs = import nixpkgs { inherit system overlays; };
 
       rust = pkgs.rust-bin.stable.latest.default;
-      nodejs = pkgs.nodejs; # Node for frontend (React + Vite)
     in
     {
       packages.${system} = rec {
-        # ---------------------
-        # Backend (Axum)
-        # ---------------------
+        # Backend package (Axum)
         backend = pkgs.rustPlatform.buildRustPackage {
           pname = "backend";
           version = "0.1.0";
           src = ./backend;
           cargoLock.lockFile = ./backend/Cargo.lock;
-
           cargoBuildOptions = [ "-p" "backend" ];
 
-          postInstall = ''
-            mkdir -p $out/share/frontend
-            cp -r ../frontend/dist/* $out/share/frontend
+          # No frontend copy, fully separate
+        };
+
+        # Frontend package (React via Node/Nix)
+        frontend = pkgs.stdenv.mkDerivation {
+          pname = "frontend";
+          version = "0.1.0";
+          src = ./frontend;
+
+          nativeBuildInputs = [
+            pkgs.nodejs
+            pkgs.yarn
+          ];
+
+          buildPhase = ''
+            yarn install
+            yarn build
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp -r build/* $out/
           '';
         };
 
-        # ---------------------
-        # Full-stack wrapper
-        # ---------------------
+        # Combined default package (optional)
         default = pkgs.symlinkJoin {
           name = "fullstack-app";
-          paths = [ backend ];
+          paths = [ backend frontend ];
         };
       };
 
-      # -------------------
-      # Apps
-      # -------------------
+      # Dev shells
+      devShells.${system}.default = pkgs.mkShell {
+        buildInputs = [
+          rust
+          pkgs.nodejs
+          pkgs.yarn
+        ];
+      };
+
+      # Apps for `nix run .#frontend` / `nix run .#backend`
       apps.${system} = rec {
         backend = {
           type = "app";
@@ -55,40 +75,11 @@
 
         frontend = {
           type = "app";
-          program = "${pkgs.writeShellScript "run-frontend" ''
-            export PATH=${nodejs}/bin:$PATH
+          program = "${pkgs.writeShellScript "frontend-dev" ''
             cd ${./frontend}
-            npx vite
+            yarn dev
           ''}";
         };
-
-        default = {
-          type = "app";
-          program = "${pkgs.writeShellScript "run-fullstack" ''
-            export PATH=${rust}/bin:${nodejs}/bin:$PATH
-
-            echo "🚀 Starting backend..."
-            ${self.packages.${system}.backend}/bin/backend &
-            BACK_PID=$!
-
-            echo "🌐 Starting frontend..."
-            cd ${./frontend}
-            npx vite
-
-            trap "kill $BACK_PID; exit 0" SIGINT SIGTERM
-            wait
-          ''}";
-        };
-      };
-
-      # -------------------
-      # Dev shell
-      # -------------------
-      devShells.${system}.default = pkgs.mkShell {
-        buildInputs = [
-          rust
-          nodejs
-        ];
       };
     };
 }
