@@ -1,5 +1,5 @@
 {
-  description = "Full-stack React + Axum Rust app with Nix flake";
+  description = "Full-stack Rust (Axum) + React (Vite)";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
@@ -14,55 +14,39 @@
       pkgs = import nixpkgs { inherit system overlays; };
 
       rust = pkgs.rust-bin.stable.latest.default;
-      nodejs = pkgs.nodejs; # Node for React
+      nodejs = pkgs.nodejs; # Node for frontend (React + Vite)
     in
     {
       packages.${system} = rec {
-        # ----------------------
-        # Backend: Rust/Axum
-        # ----------------------
+        # ---------------------
+        # Backend (Axum)
+        # ---------------------
         backend = pkgs.rustPlatform.buildRustPackage {
           pname = "backend";
           version = "0.1.0";
           src = ./backend;
-          cargoLock.lockFile = ./backend/Cargo.lock;
+          cargoLock.lockFile = ./Cargo.lock;
 
           cargoBuildOptions = [ "-p" "backend" ];
-        };
 
-        # ----------------------
-        # Frontend: React
-        # ----------------------
-        frontend = pkgs.stdenv.mkDerivation {
-          pname = "frontend";
-          version = "0.1.0";
-          src = ./frontend;
-
-          nativeBuildInputs = [ nodejs ];
-
-          buildPhase = ''
-            npm install
-            npm run build
-          '';
-
-          installPhase = ''
-            mkdir -p $out
-            cp -r dist/* $out/
+          postInstall = ''
+            mkdir -p $out/share/frontend
+            cp -r ../frontend/dist/* $out/share/frontend
           '';
         };
 
-        # ----------------------
-        # Fullstack combined
-        # ----------------------
+        # ---------------------
+        # Full-stack wrapper
+        # ---------------------
         default = pkgs.symlinkJoin {
           name = "fullstack-app";
-          paths = [ backend frontend ];
+          paths = [ backend ];
         };
       };
 
-      # ----------------------
-      # Apps for `nix run .#foo`
-      # ----------------------
+      # -------------------
+      # Apps
+      # -------------------
       apps.${system} = rec {
         backend = {
           type = "app";
@@ -74,7 +58,7 @@
           program = "${pkgs.writeShellScript "run-frontend" ''
             export PATH=${nodejs}/bin:$PATH
             cd ${./frontend}
-            npm run dev
+            npx vite
           ''}";
         };
 
@@ -89,20 +73,22 @@
 
             echo "🌐 Starting frontend..."
             cd ${./frontend}
-            npm run dev
+            npx vite
 
-            # Forward Ctrl+C
             trap "kill $BACK_PID; exit 0" SIGINT SIGTERM
             wait
           ''}";
         };
       };
 
-      # ----------------------
+      # -------------------
       # Dev shell
-      # ----------------------
+      # -------------------
       devShells.${system}.default = pkgs.mkShell {
-        buildInputs = [ rust nodejs ];
+        buildInputs = [
+          rust
+          nodejs
+        ];
       };
     };
 }
