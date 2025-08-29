@@ -16,7 +16,13 @@
         "type": "github"
       }
     },
-    "oxalica": {
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "rust-overlay": "rust-overlay"
+      }
+    },
+    "rust-overlay": {
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
@@ -34,12 +40,6 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "type": "github"
-      }
-    },
-    "root": {
-      "inputs": {
-        "nixpkgs": "nixpkgs",
-        "oxalica": "oxalica"
       }
     }
   },

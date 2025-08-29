@@ -17,18 +17,20 @@
     in
     {
       packages.${system} = rec {
-        # Backend package (Axum)
+        # -----------------
+        # Backend: Axum
+        # -----------------
         backend = pkgs.rustPlatform.buildRustPackage {
           pname = "backend";
           version = "0.1.0";
           src = ./backend;
           cargoLock.lockFile = ./backend/Cargo.lock;
           cargoBuildOptions = [ "-p" "backend" ];
-
-          # No frontend copy, fully separate
         };
 
-        # Frontend package (React via Node/Nix)
+        # -----------------
+        # Frontend: React + Vite
+        # -----------------
         frontend = pkgs.stdenv.mkDerivation {
           pname = "frontend";
           version = "0.1.0";
@@ -40,6 +42,7 @@
           ];
 
           buildPhase = ''
+            export PATH=$PATH:${pkgs.yarn}/bin
             yarn install
             yarn build
           '';
@@ -50,23 +53,33 @@
           '';
         };
 
-        # Combined default package (optional)
+        # -----------------
+        # Optional combined package
+        # -----------------
         default = pkgs.symlinkJoin {
           name = "fullstack-app";
           paths = [ backend frontend ];
         };
       };
 
-      # Dev shells
+      # -----------------
+      # Dev shell
+      # -----------------
       devShells.${system}.default = pkgs.mkShell {
         buildInputs = [
           rust
           pkgs.nodejs
           pkgs.yarn
         ];
+
+        shellHook = ''
+          export PATH=$PATH:${pkgs.yarn}/bin
+        '';
       };
 
-      # Apps for `nix run .#frontend` / `nix run .#backend`
+      # -----------------
+      # Apps for nix run
+      # -----------------
       apps.${system} = rec {
         backend = {
           type = "app";
@@ -76,6 +89,7 @@
         frontend = {
           type = "app";
           program = "${pkgs.writeShellScript "frontend-dev" ''
+            export PATH=$PATH:${pkgs.yarn}/bin
             cd ${./frontend}
             yarn dev
           ''}";
